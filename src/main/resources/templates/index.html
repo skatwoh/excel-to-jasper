@@ -4,56 +4,87 @@
     <title>Excel to Jasper Converter</title>
     <meta charset="UTF-8">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .hidden { display: none; }
+    </style>
 </head>
 <body class="container py-5">
-    <h1 class="mb-4">Excel to Jasper (JRXML) Converter</h1>
+    <h1 class="mb-4 text-center">Excel to Jasper (JRXML) Converter</h1>
 
     <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
 
     <div class="card mb-4" th:if="${sheetNames == null}">
-        <div class="card-header">Upload Excel File</div>
+        <div class="card-header bg-primary text-white">1. Upload Excel File</div>
         <div class="card-body">
             <form action="/list-sheets" method="post" enctype="multipart/form-data" class="row g-3">
                 <div class="col-auto">
                     <input type="file" name="file" class="form-control" accept=".xlsx" required>
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">List Sheets</button>
+                    <button type="submit" class="btn btn-primary">Analyze Excel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="card" th:if="${sheetNames != null}">
-        <div class="card-header">
-            Convert <b><span th:text="${fileName}"></span></b>
+    <div class="card shadow-sm" th:if="${sheetNames != null}">
+        <div class="card-header bg-success text-white">
+            2. Configure Conversion: <b><span th:text="${fileName}"></span></b>
         </div>
         <div class="card-body">
-            <form action="/convert" method="post" class="row g-3">
+            <form id="convertForm" action="/convert" method="post" class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">Select Sheet</label>
+                    <label class="form-label fw-bold">Select Sheet</label>
                     <select name="sheetName" class="form-select">
                         <option th:each="sheet : ${sheetNames}" th:value="${sheet}" th:text="${sheet}"></option>
                     </select>
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label">Header Start Row (0-indexed)</label>
+                    <label class="form-label fw-bold">Header Start Row (0-indexed)</label>
                     <input type="number" name="headerStartRow" class="form-control" value="0" required>
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label">Header Row Count</label>
+                    <label class="form-label fw-bold">Header Row Count</label>
                     <input type="number" name="headerRowCount" class="form-control" value="2" required>
                 </div>
 
-                <div class="col-12 mt-4">
-                    <button type="submit" class="btn btn-success">Convert and Download JRXML</button>
-                    <a href="/" class="btn btn-secondary">Upload different file</a>
+                <div class="col-12 mt-4 text-center">
+                    <button type="submit" id="convertBtn" class="btn btn-success btn-lg px-5">
+                        Convert and Download JRXML
+                    </button>
+                    <div id="loader" class="hidden mt-3">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Generating JRXML, please wait...</p>
+                    </div>
+                </div>
+                <div class="col-12 mt-2 text-center">
+                    <a href="/" class="btn btn-outline-secondary">Upload different file</a>
                 </div>
             </form>
         </div>
     </div>
+
+    <script>
+        document.getElementById('convertForm')?.addEventListener('submit', function() {
+            const btn = document.getElementById('convertBtn');
+            const loader = document.getElementById('loader');
+
+            btn.classList.add('disabled');
+            btn.innerHTML = 'Processing...';
+            loader.classList.remove('hidden');
+
+            // Re-enable after some time as the download will not refresh the page
+            setTimeout(() => {
+                btn.classList.remove('disabled');
+                btn.innerHTML = 'Convert and Download JRXML';
+                loader.classList.add('hidden');
+            }, 5000);
+        });
+    </script>
 
 </body>
 </html>

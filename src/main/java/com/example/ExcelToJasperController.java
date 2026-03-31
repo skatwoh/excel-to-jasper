@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import javax.servlet.http.HttpSession;
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 @Controller
@@ -47,11 +47,11 @@ public class ExcelToJasperController {
     }
 
     @PostMapping("/convert")
-    public ResponseEntity<StreamingResponseBody> convert(
+    public ResponseEntity<byte[]> convert(
             @RequestParam("sheetName") String sheetName,
             @RequestParam("headerStartRow") int headerStartRow,
             @RequestParam("headerRowCount") int headerRowCount,
-            HttpSession session) {
+            HttpSession session) throws Exception {
 
         byte[] fileBytes = (byte[]) session.getAttribute("fileBytes");
         String fileName = (String) session.getAttribute("fileName");
@@ -62,23 +62,21 @@ public class ExcelToJasperController {
 
         String jrxmlFileName = fileName.replace(".xlsx", "_" + sheetName + ".jrxml");
 
-        StreamingResponseBody responseBody = outputStream -> {
-            try {
-                excelToJasperService.convert(
-                        new java.io.ByteArrayInputStream(fileBytes),
-                        sheetName,
-                        outputStream,
-                        headerStartRow,
-                        headerRowCount
-                );
-            } catch (Exception e) {
-                throw new IOException("Error during conversion", e);
-            }
-        };
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        excelToJasperService.convert(
+                new ByteArrayInputStream(fileBytes),
+                sheetName,
+                baos,
+                headerStartRow,
+                headerRowCount
+        );
+
+        byte[] jrxmlBytes = baos.toByteArray();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + jrxmlFileName + "\"")
-                .contentType(MediaType.APPLICATION_XML)
-                .body(responseBody);
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentLength(jrxmlBytes.length)
+                .body(jrxmlBytes);
     }
 }
