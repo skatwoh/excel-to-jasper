@@ -1,5 +1,6 @@
 package com.example;
 
+import net.sf.jasperreports.engine.JRLineBox;
 import net.sf.jasperreports.engine.design.*;
 import net.sf.jasperreports.engine.type.*;
 import net.sf.jasperreports.engine.xml.JRXmlWriter;
@@ -8,17 +9,15 @@ import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import javax.swing.*;
-import java.awt.*;
-import java.awt.Color;
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.*;
-import java.util.List;
 
-public class ExcelToJasperApp2 {
+public class ExcelToJasperApp3 {
 
     public static void main(String[] args) throws Exception {
 
+        // ===== CHỌN FILE =====
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Chọn file Excel");
 
@@ -28,24 +27,57 @@ public class ExcelToJasperApp2 {
 
         File file = chooser.getSelectedFile();
         String excelPath = file.getAbsolutePath();
-        String jrxmlPath = excelPath.replace(".xlsx", "_PRO.jrxml");
 
-        convert(excelPath, jrxmlPath, 0, 2);
+        // ===== LOAD WORKBOOK =====
+        Workbook wb = new XSSFWorkbook(new FileInputStream(excelPath));
 
-        System.out.println("DONE PRO: " + jrxmlPath);
+        List<String> sheetNames = new ArrayList<>();
+        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+            sheetNames.add(wb.getSheetName(i));
+        }
+
+        // ===== CHỌN SHEET =====
+        String selectedSheet = (String) JOptionPane.showInputDialog(
+                null,
+                "Chọn sheet:",
+                "Select Sheet",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                sheetNames.toArray(),
+                sheetNames.get(0)
+        );
+
+        if (selectedSheet == null) {
+            wb.close();
+            return;
+        }
+
+        wb.close();
+
+        String jrxmlPath = excelPath.replace(".xlsx", "_" + selectedSheet + ".jrxml");
+
+        int headerStartRow = 0;
+        int headerRowCount = 2;
+
+        convert(excelPath, selectedSheet, jrxmlPath, headerStartRow, headerRowCount);
+
+        System.out.println("DONE: " + jrxmlPath);
     }
 
-    public static void convert(String excelPath, String jrxmlPath,
-                               int headerStartRow, int headerRowCount) throws Exception {
+    public static void convert(String excelPath,
+                               String sheetName,
+                               String jrxmlPath,
+                               int headerStartRow,
+                               int headerRowCount) throws Exception {
 
         Workbook wb = new XSSFWorkbook(new FileInputStream(excelPath));
-        Sheet sheet = wb.getSheetAt(0);
+        Sheet sheet = wb.getSheet(sheetName);
 
         Row lastHeader = sheet.getRow(headerStartRow + headerRowCount - 1);
         int colCount = lastHeader.getPhysicalNumberOfCells();
 
         // ======================
-        // WIDTH
+        // WIDTH FROM EXCEL
         // ======================
         List<Integer> colWidths = new ArrayList<>();
         int totalWidth = 0;
@@ -66,11 +98,13 @@ public class ExcelToJasperApp2 {
         design.setName("PRO_REPORT");
 
         int margin = 20;
+
         design.setLeftMargin(margin);
         design.setRightMargin(margin);
         design.setTopMargin(20);
         design.setBottomMargin(20);
 
+        // 🔥 AUTO EXPAND PAGE
         design.setColumnWidth(totalWidth);
         design.setPageWidth(totalWidth + margin * 2);
         design.setPageHeight(842);
@@ -82,12 +116,14 @@ public class ExcelToJasperApp2 {
         Set<String> used = new HashSet<>();
 
         for (int i = 0; i < colCount; i++) {
+
             String name = lastHeader.getCell(i) == null
                     ? "COL_" + i
                     : lastHeader.getCell(i).toString().replace(" ", "_");
 
             String base = name;
             int count = 1;
+
             while (used.contains(name)) {
                 name = base + "_" + count++;
             }
@@ -102,9 +138,10 @@ public class ExcelToJasperApp2 {
         }
 
         // ======================
-        // MERGE REGION MAP
+        // MERGE MAP
         // ======================
         Map<String, CellRangeAddress> mergeMap = new HashMap<>();
+
         for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
             CellRangeAddress r = sheet.getMergedRegion(i);
             mergeMap.put(r.getFirstRow() + "_" + r.getFirstColumn(), r);
@@ -123,14 +160,12 @@ public class ExcelToJasperApp2 {
 
             for (int c = 0; c < colCount; c++) {
 
-                String key = (headerStartRow + r) + "_" + c;
-
-                // skip merged slave cells
                 if (isMergedButNotFirst(sheet, headerStartRow + r, c)) {
                     x += colWidths.get(c);
                     continue;
                 }
 
+                String key = (headerStartRow + r) + "_" + c;
                 CellRangeAddress region = mergeMap.get(key);
 
                 int width = colWidths.get(c);
@@ -156,7 +191,7 @@ public class ExcelToJasperApp2 {
                 st.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
                 st.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
 
-                applyStyle(st, row.getCell(c), wb);
+                applyStyle(st, row.getCell(c));
 
                 header.addElement(st);
 
@@ -188,6 +223,8 @@ public class ExcelToJasperApp2 {
             ex.setText("$F{" + fields.get(i) + "}");
             tf.setExpression(ex);
 
+            applyStyle(tf, null);
+
             detail.addElement(tf);
 
             x += colWidths.get(i);
@@ -199,12 +236,14 @@ public class ExcelToJasperApp2 {
         // EXPORT
         // ======================
         JRXmlWriter.writeReport(design, jrxmlPath, "UTF-8");
+
         wb.close();
     }
 
     // ======================
     // UTIL
     // ======================
+
     private static boolean isMergedButNotFirst(Sheet sheet, int row, int col) {
         for (int i = 0; i < sheet.getNumMergedRegions(); i++) {
             CellRangeAddress r = sheet.getMergedRegion(i);
@@ -220,28 +259,23 @@ public class ExcelToJasperApp2 {
         return cell.toString();
     }
 
-    private static void applyStyle(JRDesignTextElement element, Cell cell, Workbook wb) {
-        if (cell == null) return;
+    // 🔥 FIX getLineBox lỗi ở đây
+    private static void applyStyle(JRDesignTextElement element, Cell cell) {
 
-        CellStyle style = cell.getCellStyle();
+        // border chuẩn
+        JRLineBox box = element.getLineBox();
 
-        // background
-        if (style.getFillForegroundColor() != 0) {
-            short idx = style.getFillForegroundColor();
-            if (wb instanceof XSSFWorkbook) {
-                XSSFWorkbook xssf = (XSSFWorkbook) wb;
-                org.apache.poi.xssf.usermodel.XSSFColor color =
-                        xssf.getStylesSource().getTheme().getThemeColor(idx);
-                if (color != null && color.getRGB() != null) {
-                    element.setBackcolor(new Color(color.getRGB()[0] & 0xFF,
-                            color.getRGB()[1] & 0xFF,
-                            color.getRGB()[2] & 0xFF));
-                    element.setMode(ModeEnum.OPAQUE);
-                }
+        box.getTopPen().setLineWidth(0.5f);
+        box.getBottomPen().setLineWidth(0.5f);
+        box.getLeftPen().setLineWidth(0.5f);
+        box.getRightPen().setLineWidth(0.5f);
+
+        // background đơn giản
+        if (cell != null) {
+            CellStyle style = cell.getCellStyle();
+            if (style.getFillForegroundColor() != 0) {
+                element.setMode(ModeEnum.OPAQUE);
             }
         }
-
-        // border
-        element.getLineBox().getPen().setLineWidth(0.5f);
     }
 }
