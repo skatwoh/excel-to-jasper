@@ -3,7 +3,7 @@ package com.example;
 import net.sf.jasperreports.components.table.*;
 import net.sf.jasperreports.engine.component.ComponentKey;
 import net.sf.jasperreports.engine.design.*;
-import net.sf.jasperreports.engine.type.HorizontalTextAlignEnum;
+import net.sf.jasperreports.engine.type.*;
 import net.sf.jasperreports.engine.xml.JRXmlWriter;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
@@ -13,6 +13,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.Color;
 import java.io.File;
 import java.io.FileInputStream;
 import java.text.Normalizer;
@@ -21,13 +22,16 @@ import java.util.List;
 
 public class ExcelToJasperFullApp extends JFrame {
 
-    private JTable mappingTable, previewTable;
+    private JTable mappingTable;
+    private JTable previewTable;
     private JList<String> sheetList;
     private JTextField fileField;
     private File selectedFile;
 
+    private Color headerColor = Color.LIGHT_GRAY; // 🎨 màu header
+
     public ExcelToJasperFullApp() {
-        setTitle("Excel → Jasper FINAL FIXED");
+        setTitle("Excel → Jasper PRO UI");
         setSize(1300, 800);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -38,14 +42,26 @@ public class ExcelToJasperFullApp extends JFrame {
         JPanel main = new JPanel(new BorderLayout());
 
         JButton chooseBtn = new JButton("Chọn Excel");
+        JButton colorBtn = new JButton("Màu Header");
+
         fileField = new JTextField();
         fileField.setEditable(false);
 
         chooseBtn.addActionListener(e -> chooseFile());
 
+        colorBtn.addActionListener(e -> {
+            Color chosen = JColorChooser.showDialog(this, "Chọn màu header", headerColor);
+            if (chosen != null) headerColor = chosen;
+        });
+
         JPanel top = new JPanel(new BorderLayout());
         top.add(fileField, BorderLayout.CENTER);
-        top.add(chooseBtn, BorderLayout.EAST);
+
+        JPanel leftTop = new JPanel();
+        leftTop.add(chooseBtn);
+        leftTop.add(colorBtn);
+
+        top.add(leftTop, BorderLayout.WEST);
 
         sheetList = new JList<>();
         sheetList.addListSelectionListener(e -> loadData());
@@ -192,16 +208,10 @@ public class ExcelToJasperFullApp extends JFrame {
                 cols.add(m);
             }
 
-            // ✅ LẤY TÊN SHEET
             String sheetName = sheetList.getSelectedValue();
-
-            // ✅ BASE FILE
             String base = selectedFile.getAbsolutePath().replace(".xlsx", "");
-
-            // ✅ NORMALIZE
             String safeSheetName = normalize(sheetName);
 
-            // ✅ OUTPUT FILE
             String out = base + "_" + safeSheetName + ".jrxml";
 
             buildJRXML(out, cols);
@@ -217,7 +227,6 @@ public class ExcelToJasperFullApp extends JFrame {
         return p.replace("$P{", "").replace("}", "").trim();
     }
 
-    // 🔥 NORMALIZE TÊN FILE
     private String normalize(String input) {
         String temp = Normalizer.normalize(input, Normalizer.Form.NFD);
         return temp.replaceAll("[^\\p{ASCII}]", "")
@@ -265,28 +274,49 @@ public class ExcelToJasperFullApp extends JFrame {
         table.setDatasetRun(run);
 
         for (Map<String, String> c : cols) {
+
             StandardColumn col = new StandardColumn();
             col.setWidth(140);
 
+            // ===== HEADER =====
             DesignCell header = new DesignCell();
             header.setHeight(30);
+            header.getLineBox().getPen().setLineWidth(1f);
+            header.getLineBox().getPen().setLineStyle(LineStyleEnum.SOLID);
 
             JRDesignStaticText txt = new JRDesignStaticText();
             txt.setText(c.get("label"));
             txt.setWidth(140);
             txt.setHeight(30);
+            txt.setBold(true);
             txt.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
+            txt.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
+            txt.setBackcolor(headerColor);
+            txt.setMode(ModeEnum.OPAQUE);
 
             header.addElement(txt);
             col.setColumnHeader(header);
 
+            // ===== DETAIL =====
             DesignCell detail = new DesignCell();
             detail.setHeight(25);
+            detail.getLineBox().getPen().setLineWidth(1f);
+            detail.getLineBox().getPen().setLineStyle(LineStyleEnum.SOLID);
 
             JRDesignTextField tf = new JRDesignTextField();
             tf.setExpression(new JRDesignExpression(c.get("exp")));
             tf.setWidth(140);
             tf.setHeight(25);
+
+            tf.setHorizontalTextAlign(HorizontalTextAlignEnum.LEFT);
+            tf.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
+            tf.setStretchWithOverflow(true);
+
+            // zebra row
+            JRDesignExpression bgExp = new JRDesignExpression();
+            bgExp.setText("$V{REPORT_COUNT} % 2 == 0 ? java.awt.Color.WHITE : new java.awt.Color(240,240,240)");
+            tf.setMode(ModeEnum.OPAQUE);
+            tf.setBackcolor(Color.WHITE);
 
             detail.addElement(tf);
             col.setDetailCell(detail);
