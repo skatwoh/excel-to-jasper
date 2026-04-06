@@ -20,6 +20,9 @@ public class ExcelToJasperFullApp extends JFrame {
     private JTextField fileField;
     private JTable sheetTable;
     private DefaultTableModel tableModel;
+    private JTabbedPane tabbedPane;
+    private JTable columnMappingTable;
+    private DefaultTableModel columnMappingModel;
 
     public ExcelToJasperFullApp() {
         setTitle("Excel → Jasper PRO");
@@ -59,12 +62,12 @@ public class ExcelToJasperFullApp extends JFrame {
         mainPanel.add(headerPanel, BorderLayout.NORTH);
 
         // --- Tabs ---
-        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane = new JTabbedPane();
         tabbedPane.setBorder(new EmptyBorder(0, 10, 0, 10));
 
         JPanel importTab = createImportTab();
         tabbedPane.addTab("Import", importTab);
-        tabbedPane.addTab("Column mapping", new JPanel());
+        tabbedPane.addTab("Column mapping", createColumnMappingTab());
         tabbedPane.addTab("Preview", new JPanel());
         tabbedPane.addTab("Output", new JPanel());
         tabbedPane.addTab("Help", new JPanel());
@@ -87,6 +90,31 @@ public class ExcelToJasperFullApp extends JFrame {
         mainPanel.add(footerPanel, BorderLayout.SOUTH);
 
         add(mainPanel);
+    }
+
+    private JPanel createColumnMappingTab() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        panel.setOpaque(false);
+
+        JLabel label = createLabel("Column mapping");
+        panel.add(label, BorderLayout.NORTH);
+
+        String[] columnNames = {"Excel Column", "Jasper Field Name", "Data Type"};
+        columnMappingModel = new DefaultTableModel(columnNames, 0);
+        columnMappingTable = new JTable(columnMappingModel);
+        columnMappingTable.setRowHeight(30);
+
+        panel.add(new JScrollPane(columnMappingTable), BorderLayout.CENTER);
+
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        bottomPanel.setOpaque(false);
+        JButton nextBtn = new JButton("Next: Preview →");
+        nextBtn.addActionListener(e -> tabbedPane.setSelectedIndex(2));
+        bottomPanel.add(nextBtn);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
+
+        return panel;
     }
 
     private JPanel createImportTab() {
@@ -193,6 +221,7 @@ public class ExcelToJasperFullApp extends JFrame {
         nextBtn.setFont(new Font("SansSerif", Font.BOLD, 14));
         nextBtn.setPreferredSize(new Dimension(200, 40));
         nextBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+        nextBtn.addActionListener(e -> goToColumnMapping());
         panel.add(nextBtn);
 
         panel.add(Box.createVerticalGlue());
@@ -213,6 +242,42 @@ public class ExcelToJasperFullApp extends JFrame {
             File selectedFile = chooser.getSelectedFile();
             fileField.setText(selectedFile.getAbsolutePath());
             loadSheets(selectedFile);
+        }
+    }
+
+    private void goToColumnMapping() {
+        int selectedRow = -1;
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            if ("Selected".equals(tableModel.getValueAt(i, 4))) {
+                selectedRow = i;
+                break;
+            }
+        }
+
+        if (selectedRow == -1 || fileField.getText().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please select an Excel file and a sheet first.");
+            return;
+        }
+
+        String sheetName = (String) tableModel.getValueAt(selectedRow, 1);
+        loadColumns(new File(fileField.getText()), sheetName);
+        tabbedPane.setSelectedIndex(1);
+    }
+
+    private void loadColumns(File file, String sheetName) {
+        columnMappingModel.setRowCount(0);
+        try (FileInputStream fis = new FileInputStream(file);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            Sheet sheet = workbook.getSheet(sheetName);
+            Row headerRow = sheet.getRow(0); // Assume first row is header for now
+            if (headerRow != null) {
+                for (int i = 0; i < headerRow.getPhysicalNumberOfCells(); i++) {
+                    String colName = headerRow.getCell(i) == null ? "COL_" + i : headerRow.getCell(i).toString();
+                    columnMappingModel.addRow(new Object[]{colName, colName.replace(" ", "_"), "String"});
+                }
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error loading columns: " + ex.getMessage());
         }
     }
 
