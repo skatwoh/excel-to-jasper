@@ -1,6 +1,11 @@
 package com.example;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+import net.sf.jasperreports.engine.design.*;
+import net.sf.jasperreports.engine.type.HorizontalTextAlignEnum;
+import net.sf.jasperreports.engine.type.ModeEnum;
+import net.sf.jasperreports.engine.xml.JRXmlWriter;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -23,6 +28,12 @@ public class ExcelToJasperFullApp extends JFrame {
     private JTabbedPane tabbedPane;
     private JTable columnMappingTable;
     private DefaultTableModel columnMappingModel;
+    private Color headerColor = new Color(211, 209, 199);
+    private JPanel colorBox;
+    private JLabel colorLabel;
+    private JTable previewDataTable;
+    private DefaultTableModel previewDataModel;
+    private JTextField outputPathField;
 
     public ExcelToJasperFullApp() {
         setTitle("Excel → Jasper PRO");
@@ -68,8 +79,8 @@ public class ExcelToJasperFullApp extends JFrame {
         JPanel importTab = createImportTab();
         tabbedPane.addTab("Import", importTab);
         tabbedPane.addTab("Column mapping", createColumnMappingTab());
-        tabbedPane.addTab("Preview", new JPanel());
-        tabbedPane.addTab("Output", new JPanel());
+        tabbedPane.addTab("Preview", createPreviewTab());
+        tabbedPane.addTab("Output", createOutputTab());
         tabbedPane.addTab("Help", new JPanel());
 
         mainPanel.add(tabbedPane, BorderLayout.CENTER);
@@ -90,6 +101,68 @@ public class ExcelToJasperFullApp extends JFrame {
         mainPanel.add(footerPanel, BorderLayout.SOUTH);
 
         add(mainPanel);
+    }
+
+    private JPanel createPreviewTab() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        panel.setOpaque(false);
+
+        JLabel label = createLabel("Preview Data");
+        panel.add(label, BorderLayout.NORTH);
+
+        previewDataModel = new DefaultTableModel();
+        previewDataTable = new JTable(previewDataModel);
+        previewDataTable.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
+        panel.add(new JScrollPane(previewDataTable), BorderLayout.CENTER);
+
+        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        bottomPanel.setOpaque(false);
+        JButton nextBtn = new JButton("Next: Output →");
+        nextBtn.addActionListener(e -> tabbedPane.setSelectedIndex(3));
+        bottomPanel.add(nextBtn);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    private JPanel createOutputTab() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        panel.setOpaque(false);
+
+        panel.add(createLabel("Output File Path"));
+        panel.add(Box.createRigidArea(new Dimension(0, 5)));
+
+        JPanel pathPanel = new JPanel(new BorderLayout(10, 0));
+        pathPanel.setOpaque(false);
+        pathPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        outputPathField = new JTextField();
+        JButton browseOutputBtn = new JButton("Browse...");
+        browseOutputBtn.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                outputPathField.setText(chooser.getSelectedFile().getAbsolutePath());
+            }
+        });
+        pathPanel.add(outputPathField, BorderLayout.CENTER);
+        pathPanel.add(browseOutputBtn, BorderLayout.EAST);
+        panel.add(pathPanel);
+
+        panel.add(Box.createRigidArea(new Dimension(0, 20)));
+
+        JButton generateBtn = new JButton("Generate JRXML");
+        generateBtn.setFont(new Font("SansSerif", Font.BOLD, 14));
+        generateBtn.setPreferredSize(new Dimension(200, 40));
+        generateBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+        generateBtn.addActionListener(e -> generateJRXML());
+        panel.add(generateBtn);
+
+        panel.add(Box.createVerticalGlue());
+
+        return panel;
     }
 
     private JPanel createColumnMappingTab() {
@@ -203,14 +276,23 @@ public class ExcelToJasperFullApp extends JFrame {
         colorPanel.setOpaque(false);
         colorPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
 
-        JPanel colorBox = new JPanel();
+        colorBox = new JPanel();
         colorBox.setPreferredSize(new Dimension(30, 30));
-        colorBox.setBackground(new Color(211, 209, 199)); // #D3D1C7
+        colorBox.setBackground(headerColor);
         colorBox.setBorder(BorderFactory.createLineBorder(Color.GRAY));
 
         colorPanel.add(colorBox);
-        colorPanel.add(new JLabel("#D3D1C7 — Light Gray"));
+        colorLabel = new JLabel(String.format("#%06X — Header Color", headerColor.getRGB() & 0xFFFFFF));
+        colorPanel.add(colorLabel);
         JButton changeColorBtn = new JButton("Change color");
+        changeColorBtn.addActionListener(e -> {
+            Color newColor = JColorChooser.showDialog(this, "Select Header Color", headerColor);
+            if (newColor != null) {
+                headerColor = newColor;
+                colorBox.setBackground(headerColor);
+                colorLabel.setText(String.format("#%06X — Header Color", headerColor.getRGB() & 0xFFFFFF));
+            }
+        });
         colorPanel.add(changeColorBtn);
         panel.add(colorPanel);
 
@@ -245,6 +327,97 @@ public class ExcelToJasperFullApp extends JFrame {
         }
     }
 
+    private void generateJRXML() {
+        try {
+            String excelPath = fileField.getText();
+            String outputPath = outputPathField.getText();
+            if (excelPath.isEmpty() || outputPath.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please select both input and output files.");
+                return;
+            }
+
+            int selectedRow = getSelectedSheetRow();
+            if (selectedRow == -1) return;
+            String sheetName = (String) tableModel.getValueAt(selectedRow, 1);
+
+            JasperDesign design = new JasperDesign();
+            design.setName("ExcelToJasperReport");
+            design.setPageWidth(595);
+            design.setPageHeight(842);
+            design.setColumnWidth(555);
+            design.setLeftMargin(20);
+            design.setRightMargin(20);
+            design.setTopMargin(20);
+            design.setBottomMargin(20);
+
+            JRDesignBand headerBand = new JRDesignBand();
+            headerBand.setHeight(30);
+
+            JRDesignBand detailBand = new JRDesignBand();
+            detailBand.setHeight(20);
+
+            int x = 0;
+            int colWidth = 555 / Math.max(1, columnMappingModel.getRowCount());
+
+            for (int i = 0; i < columnMappingModel.getRowCount(); i++) {
+                String excelColName = (String) columnMappingModel.getValueAt(i, 0);
+                String jasperFieldName = (String) columnMappingModel.getValueAt(i, 1);
+
+                // Add Field
+                JRDesignField field = new JRDesignField();
+                field.setName(jasperFieldName);
+                field.setValueClass(String.class);
+                design.addField(field);
+
+                // Header element
+                JRDesignStaticText headerText = new JRDesignStaticText();
+                headerText.setX(x);
+                headerText.setY(0);
+                headerText.setWidth(colWidth);
+                headerText.setHeight(30);
+                headerText.setText(excelColName);
+                headerText.setBold(true);
+                headerText.setMode(ModeEnum.OPAQUE);
+                headerText.setBackcolor(headerColor);
+                headerText.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
+                headerBand.addElement(headerText);
+
+                // Detail element
+                JRDesignTextField detailField = new JRDesignTextField();
+                detailField.setX(x);
+                detailField.setY(0);
+                detailField.setWidth(colWidth);
+                detailField.setHeight(20);
+                JRDesignExpression expression = new JRDesignExpression();
+                expression.setText("$F{" + jasperFieldName + "}");
+                detailField.setExpression(expression);
+                detailField.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
+                detailBand.addElement(detailField);
+
+                x += colWidth;
+            }
+
+            design.setColumnHeader(headerBand);
+            ((JRDesignSection) design.getDetailSection()).addBand(detailBand);
+
+            JRXmlWriter.writeReport(design, outputPath, "UTF-8");
+
+            JOptionPane.showMessageDialog(this, "JRXML generated successfully at:\n" + outputPath);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error generating JRXML: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+    }
+
+    private int getSelectedSheetRow() {
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            if ("Selected".equals(tableModel.getValueAt(i, 4))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private void goToColumnMapping() {
         int selectedRow = -1;
         for (int i = 0; i < tableModel.getRowCount(); i++) {
@@ -261,7 +434,44 @@ public class ExcelToJasperFullApp extends JFrame {
 
         String sheetName = (String) tableModel.getValueAt(selectedRow, 1);
         loadColumns(new File(fileField.getText()), sheetName);
+        loadPreviewData(new File(fileField.getText()), sheetName);
+
+        // Auto-set output path
+        File inputFile = new File(fileField.getText());
+        String outPath = inputFile.getParent() + File.separator + inputFile.getName().replace(".xlsx", ".jrxml");
+        outputPathField.setText(outPath);
+
         tabbedPane.setSelectedIndex(1);
+    }
+
+    private void loadPreviewData(File file, String sheetName) {
+        previewDataModel.setRowCount(0);
+        previewDataModel.setColumnCount(0);
+        try (FileInputStream fis = new FileInputStream(file);
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            Sheet sheet = workbook.getSheet(sheetName);
+            int maxCols = 0;
+            for (Row row : sheet) {
+                maxCols = Math.max(maxCols, row.getPhysicalNumberOfCells());
+            }
+
+            for (int i = 0; i < maxCols; i++) {
+                previewDataModel.addColumn("Column " + i);
+            }
+
+            int rowLimit = Math.min(sheet.getLastRowNum() + 1, 100);
+            for (int i = 0; i < rowLimit; i++) {
+                Row row = sheet.getRow(i);
+                Vector<String> rowData = new Vector<>();
+                for (int j = 0; j < maxCols; j++) {
+                    Cell cell = row == null ? null : row.getCell(j);
+                    rowData.add(cell == null ? "" : cell.toString());
+                }
+                previewDataModel.addRow(rowData);
+            }
+        } catch (Exception ex) {
+            System.err.println("Error loading preview data: " + ex.getMessage());
+        }
     }
 
     private void loadColumns(File file, String sheetName) {
