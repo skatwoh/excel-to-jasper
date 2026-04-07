@@ -26,6 +26,8 @@ public class ExcelToJasperController {
     private static final int FREE_LIMIT = 5;
     private static final String VALID_LICENSE = "PRO-2024-EXCEL-JASPER";
 
+    private static int globalUsageCount = 0;
+
     @GetMapping("/")
     public String index(HttpSession session, Model model) {
         // Initialize usage count if not exists
@@ -121,6 +123,7 @@ public class ExcelToJasperController {
         session.setAttribute("jrxmlFileName", jrxmlFileName);
 
         session.setAttribute("usageCount", usageCount + 1);
+        globalUsageCount++;
 
         redirectAttributes.addFlashAttribute("success", "Conversion successful! You can now download the file.");
         return "redirect:/";

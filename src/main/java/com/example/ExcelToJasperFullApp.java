@@ -254,13 +254,18 @@ public class ExcelToJasperFullApp extends JFrame {
             previewTable.setModel(new DefaultTableModel(data, columns));
 
             Vector<String> mapCols = new Vector<>(Arrays.asList(
-                    "Use", "Original", "Field", "Label", "Param", "Source", "Expression"
+                    "Use", "Original", "Field", "Label", "Param", "Source", "Expression", "Width"
             ));
 
             Vector<Vector<Object>> mapData = new Vector<>();
 
-            for (String col : columns) {
+            for (int i = 0; i < colCount; i++) {
+                String col = columns.get(i);
                 String clean = col.replace(" ", "_");
+
+                int w = sheet.getColumnWidth(i);
+                int px = (int) (w / 256.0 * 7);
+                if (px < 50) px = 50;
 
                 Vector<Object> row = new Vector<>();
                 row.add(true);
@@ -270,6 +275,7 @@ public class ExcelToJasperFullApp extends JFrame {
                 row.add("P_" + clean);
                 row.add("FIELD");
                 row.add("$F{" + clean + "}");
+                row.add(px);
 
                 mapData.add(row);
             }
@@ -315,6 +321,7 @@ public class ExcelToJasperFullApp extends JFrame {
                 String param = cleanParam(model.getValueAt(i, 4).toString());
                 String source = model.getValueAt(i, 5).toString();
                 String exp = model.getValueAt(i, 6).toString();
+                int widthVal = Integer.parseInt(model.getValueAt(i, 7).toString());
 
                 if (exp == null || exp.trim().isEmpty()) {
                     exp = source.equals("PARAM")
@@ -327,6 +334,7 @@ public class ExcelToJasperFullApp extends JFrame {
                 m.put("label", label);
                 m.put("param", param);
                 m.put("exp", exp);
+                m.put("width", String.valueOf(widthVal));
 
                 cols.add(m);
             }
@@ -369,10 +377,18 @@ public class ExcelToJasperFullApp extends JFrame {
         JasperDesign design = new JasperDesign();
         design.setName("FINAL_REPORT");
 
-        int width = cols.size() * 140;
-        design.setColumnWidth(width);
-        design.setPageWidth(width + 40);
+        int totalContentWidth = 0;
+        for (Map<String, String> c : cols) {
+            totalContentWidth += Integer.parseInt(c.get("width"));
+        }
+
+        design.setColumnWidth(totalContentWidth);
+        design.setPageWidth(totalContentWidth + 40);
         design.setPageHeight(842);
+        design.setLeftMargin(20);
+        design.setRightMargin(20);
+        design.setTopMargin(20);
+        design.setBottomMargin(20);
 
         // SUB DATASET
         JRDesignDataset dataset = new JRDesignDataset(false);
@@ -411,18 +427,19 @@ public class ExcelToJasperFullApp extends JFrame {
 
         for (Map<String, String> c : cols) {
 
+            int colWidth = Integer.parseInt(c.get("width"));
             StandardColumn col = new StandardColumn();
-            col.setWidth(140);
+            col.setWidth(colWidth);
 
             // ===== HEADER =====
             DesignCell header = new DesignCell();
             header.setHeight(30);
-            header.getLineBox().getPen().setLineWidth(1f);
+            header.getLineBox().getPen().setLineWidth(0.5f);
             header.getLineBox().getPen().setLineStyle(LineStyleEnum.SOLID);
 
             JRDesignStaticText txt = new JRDesignStaticText();
             txt.setText(c.get("label"));
-            txt.setWidth(140);
+            txt.setWidth(colWidth);
             txt.setHeight(30);
             txt.setBold(true);
             txt.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
@@ -436,12 +453,12 @@ public class ExcelToJasperFullApp extends JFrame {
             // ===== DETAIL =====
             DesignCell detail = new DesignCell();
             detail.setHeight(25);
-            detail.getLineBox().getPen().setLineWidth(1f);
+            detail.getLineBox().getPen().setLineWidth(0.5f);
             detail.getLineBox().getPen().setLineStyle(LineStyleEnum.SOLID);
 
             JRDesignTextField tf = new JRDesignTextField();
             tf.setExpression(new JRDesignExpression(c.get("exp")));
-            tf.setWidth(140);
+            tf.setWidth(colWidth);
             tf.setHeight(25);
 
             tf.setHorizontalTextAlign(HorizontalTextAlignEnum.LEFT);
@@ -468,7 +485,10 @@ public class ExcelToJasperFullApp extends JFrame {
         ));
 
         comp.setComponent(table);
-        comp.setWidth(width);
+        comp.setX(0);
+        comp.setY(0);
+        comp.setWidth(totalContentWidth);
+        comp.setHeight(60);
 
         JRDesignBand band = new JRDesignBand();
         band.setHeight(60);

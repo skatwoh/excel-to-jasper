@@ -1,6 +1,10 @@
 package com.example;
 
+import net.sf.jasperreports.components.table.DesignCell;
+import net.sf.jasperreports.components.table.StandardColumn;
+import net.sf.jasperreports.components.table.StandardTable;
 import net.sf.jasperreports.engine.JRLineBox;
+import net.sf.jasperreports.engine.component.ComponentKey;
 import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import net.sf.jasperreports.engine.design.*;
 import net.sf.jasperreports.engine.type.*;
@@ -76,25 +80,26 @@ public class ExcelToJasperService {
             design.setPageHeight(842);
 
             // ======================
-            // FIELDS
+            // FIELDS & DATASET
             // ======================
             JRDesignParameter dsParam = new JRDesignParameter();
             dsParam.setName("ItemDataSource");
             dsParam.setValueClass(JRBeanCollectionDataSource.class);
             design.addParameter(dsParam);
 
+            JRDesignDataset dataset = new JRDesignDataset(false);
+            dataset.setName("ItemDataSource");
+
             List<String> fields = new ArrayList<>();
             Set<String> used = new HashSet<>();
 
             for (int i = 0; i < colCount; i++) {
-
                 String name = lastHeader.getCell(i) == null
                         ? "COL_" + i
                         : lastHeader.getCell(i).toString().replace(" ", "_");
 
                 String base = name;
                 int count = 1;
-
                 while (used.contains(name)) {
                     name = base + "_" + count++;
                 }
@@ -105,8 +110,9 @@ public class ExcelToJasperService {
                 JRDesignField f = new JRDesignField();
                 f.setName(name);
                 f.setValueClass(String.class);
-                design.addField(f);
+                dataset.addField(f);
             }
+            design.addDataset(dataset);
 
             // ======================
             // MERGE MAP
@@ -119,89 +125,65 @@ public class ExcelToJasperService {
             }
 
             // ======================
-            // HEADER
+            // TABLE
             // ======================
-            JRDesignBand header = new JRDesignBand();
-            header.setHeight(30 * headerRowCount);
+            StandardTable table = new StandardTable();
 
-            for (int r = 0; r < headerRowCount; r++) {
-
-                Row row = sheet.getRow(headerStartRow + r);
-                int x = 0;
-
-                for (int c = 0; c < colCount; c++) {
-
-                    if (isMergedButNotFirst(sheet, headerStartRow + r, c)) {
-                        x += colWidths.get(c);
-                        continue;
-                    }
-
-                    String key = (headerStartRow + r) + "_" + c;
-                    CellRangeAddress region = mergeMap.get(key);
-
-                    int width = colWidths.get(c);
-                    int height = 30;
-
-                    if (region != null) {
-                        width = 0;
-                        for (int i = region.getFirstColumn(); i <= region.getLastColumn(); i++) {
-                            width += colWidths.get(i);
-                        }
-                        height = (region.getLastRow() - region.getFirstRow() + 1) * 30;
-                    }
-
-                    String text = getCellValue(row.getCell(c));
-
-                    JRDesignStaticText st = new JRDesignStaticText();
-                    st.setX(x);
-                    st.setY(r * 30);
-                    st.setWidth(width);
-                    st.setHeight(height);
-                    st.setText(text);
-                    st.setBold(true);
-                    st.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
-                    st.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
-
-                    applyStyle(st, row.getCell(c));
-
-                    header.addElement(st);
-
-                    x += colWidths.get(c);
-                }
-            }
-
-            design.setColumnHeader(header);
-
-            // ======================
-            // DETAIL
-            // ======================
-            JRDesignBand detail = new JRDesignBand();
-            detail.setHeight(25);
-
-            int x = 0;
+            JRDesignDatasetRun datasetRun = new JRDesignDatasetRun();
+            datasetRun.setDatasetName("ItemDataSource");
+            datasetRun.setDataSourceExpression(new JRDesignExpression("$P{ItemDataSource}"));
+            table.setDatasetRun(datasetRun);
 
             for (int i = 0; i < fields.size(); i++) {
+                StandardColumn column = new StandardColumn();
+                column.setWidth(colWidths.get(i));
+
+                // HEADER
+                DesignCell headerCell = new DesignCell();
+                headerCell.setHeight(30);
+                headerCell.getLineBox().getPen().setLineWidth(0.5f);
+
+                JRDesignStaticText headerText = new JRDesignStaticText();
+                headerText.setWidth(colWidths.get(i));
+                headerText.setHeight(30);
+                headerText.setText(fields.get(i));
+                headerText.setBold(true);
+                headerText.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
+                headerText.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
+
+                headerCell.addElement(headerText);
+                column.setColumnHeader(headerCell);
+
+                // DETAIL
+                DesignCell detailCell = new DesignCell();
+                detailCell.setHeight(25);
+                detailCell.getLineBox().getPen().setLineWidth(0.5f);
 
                 JRDesignTextField tf = new JRDesignTextField();
-                tf.setX(x);
-                tf.setY(0);
                 tf.setWidth(colWidths.get(i));
                 tf.setHeight(25);
+                tf.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
+                tf.setExpression(new JRDesignExpression("$F{" + fields.get(i) + "}"));
 
-                tf.setHorizontalTextAlign(HorizontalTextAlignEnum.LEFT);
+                detailCell.addElement(tf);
+                column.setDetailCell(detailCell);
 
-                JRDesignExpression ex = new JRDesignExpression();
-                ex.setText("$F{" + fields.get(i) + "}");
-                tf.setExpression(ex);
-
-                applyStyle(tf, null);
-
-                detail.addElement(tf);
-
-                x += colWidths.get(i);
+                table.addColumn(column);
             }
 
-            ((JRDesignSection) design.getDetailSection()).addBand(detail);
+            JRDesignComponentElement componentElement = new JRDesignComponentElement();
+            componentElement.setX(0);
+            componentElement.setY(0);
+            componentElement.setWidth(totalWidth);
+            componentElement.setHeight(60);
+            componentElement.setComponentKey(new ComponentKey("http://jasperreports.sourceforge.net/jasperreports/components", "jr", "table"));
+            componentElement.setComponent(table);
+
+            JRDesignBand detailBand = new JRDesignBand();
+            detailBand.setHeight(60);
+            detailBand.addElement(componentElement);
+
+            ((JRDesignSection) design.getDetailSection()).addBand(detailBand);
 
             // ======================
             // EXPORT
