@@ -44,13 +44,35 @@ public class ExcelToJasperFullApp extends JFrame {
 
     private void initUI() {
         JPanel main = new JPanel(new BorderLayout());
-        main.setBorder(new EmptyBorder(10, 10, 10, 10));
+        main.setBackground(new Color(30, 30, 30));
 
-        // --- Top Panel: File Selection & Configuration ---
-        JButton chooseBtn = new JButton("Chọn Excel");
-        JButton colorBtn = new JButton("Màu Header");
+        // --- Header Bar ---
+        JPanel headerBar = new JPanel(new BorderLayout());
+        headerBar.setBackground(new Color(45, 45, 48));
+        headerBar.setBorder(new EmptyBorder(15, 20, 15, 20));
+
+        JLabel titleLabel = new JLabel("EXCEL TO JASPER PRO");
+        titleLabel.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 22));
+        titleLabel.setForeground(Color.WHITE);
+        headerBar.add(titleLabel, BorderLayout.WEST);
+
+        // --- Top Dashboard: File & Settings ---
+        JPanel settingsCard = new JPanel(new GridBagLayout());
+        settingsCard.putClientProperty("FlatLaf.style", "arc: 15");
+        settingsCard.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        JButton chooseBtn = new JButton("Chọn File Excel");
+        chooseBtn.putClientProperty("JButton.buttonType", "roundRect");
+        chooseBtn.setBackground(new Color(0, 122, 204));
+        chooseBtn.setForeground(Color.WHITE);
+
+        JButton colorBtn = new JButton("Màu Header Report");
+        colorBtn.putClientProperty("JButton.buttonType", "roundRect");
+
         fileField = new JTextField();
         fileField.setEditable(false);
+        fileField.putClientProperty("JTextField.placeholderText", "Đường dẫn file Excel...");
+        fileField.putClientProperty("FlatLaf.style", "arc: 10");
 
         chooseBtn.addActionListener(e -> chooseFile());
         colorBtn.addActionListener(e -> {
@@ -58,64 +80,100 @@ public class ExcelToJasperFullApp extends JFrame {
             if (chosen != null) headerColor = chosen;
         });
 
-        JPanel topPanel = new JPanel(new GridBagLayout());
-        topPanel.setBorder(BorderFactory.createTitledBorder(
-                BorderFactory.createEtchedBorder(), "Cấu hình File & Giao diện",
-                TitledBorder.LEFT, TitledBorder.TOP));
-
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(5, 10, 5, 10);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
-        topPanel.add(chooseBtn, gbc);
+        settingsCard.add(chooseBtn, gbc);
 
         gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 1;
-        topPanel.add(fileField, gbc);
+        settingsCard.add(fileField, gbc);
 
         gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 0;
-        topPanel.add(colorBtn, gbc);
+        settingsCard.add(colorBtn, gbc);
 
-        // --- Center Panel: Sheets, Preview & Mapping ---
+        // --- Sidebar: Sheet Selection ---
         sheetList = new JList<>();
+        sheetList.setFixedCellHeight(40);
+        sheetList.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 14));
+        sheetList.setSelectionBackground(new Color(0, 122, 204, 100));
         sheetList.addListSelectionListener(e -> loadData());
-        JScrollPane sheetScroll = new JScrollPane(sheetList);
-        JPanel sheetPanel = new JPanel(new BorderLayout());
-        sheetPanel.setBorder(BorderFactory.createTitledBorder("Danh sách Sheet"));
-        sheetPanel.add(sheetScroll, BorderLayout.CENTER);
 
+        JScrollPane sheetScroll = new JScrollPane(sheetList);
+        sheetScroll.setBorder(BorderFactory.createEmptyBorder());
+
+        JPanel sidebarPanel = new JPanel(new BorderLayout());
+        sidebarPanel.setBackground(new Color(37, 37, 38));
+        sidebarPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(63, 63, 70)),
+                new EmptyBorder(10, 0, 10, 0)));
+
+        JLabel sidebarTitle = new JLabel("  DANH SÁCH SHEET");
+        sidebarTitle.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12));
+        sidebarTitle.setForeground(new Color(150, 150, 150));
+        sidebarTitle.setPreferredSize(new Dimension(200, 30));
+
+        sidebarPanel.add(sidebarTitle, BorderLayout.NORTH);
+        sidebarPanel.add(sheetScroll, BorderLayout.CENTER);
+
+        // --- Main Content: Preview & Mapping ---
         previewTable = new JTable();
+        previewTable.setRowHeight(25);
+        previewTable.setShowGrid(true);
+        previewTable.setGridColor(new Color(63, 63, 70));
+
         JScrollPane previewScroll = new JScrollPane(previewTable);
-        JPanel previewPanel = new JPanel(new BorderLayout());
-        previewPanel.setBorder(BorderFactory.createTitledBorder("Xem trước dữ liệu (20 dòng đầu)"));
-        previewPanel.add(previewScroll, BorderLayout.CENTER);
+        previewScroll.setBorder(BorderFactory.createLineBorder(new Color(63, 63, 70)));
+
+        JPanel previewCard = new JPanel(new BorderLayout());
+        previewCard.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createEmptyBorder(10, 10, 10, 10), "XEM TRƯỚC DỮ LIỆU",
+                TitledBorder.LEFT, TitledBorder.TOP, new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12)));
+        previewCard.add(previewScroll, BorderLayout.CENTER);
 
         mappingTable = new JTable();
+        mappingTable.setRowHeight(30);
+
         JScrollPane mappingScroll = new JScrollPane(mappingTable);
-        JPanel mappingPanel = new JPanel(new BorderLayout());
-        mappingPanel.setBorder(BorderFactory.createTitledBorder("Cấu hình Mapping Cột"));
-        mappingPanel.add(mappingScroll, BorderLayout.CENTER);
+        mappingScroll.setBorder(BorderFactory.createLineBorder(new Color(63, 63, 70)));
 
-        JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, previewPanel, mappingPanel);
+        JPanel mappingCard = new JPanel(new BorderLayout());
+        mappingCard.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createEmptyBorder(10, 10, 10, 10), "CẤU HÌNH MAPPING CỘT",
+                TitledBorder.LEFT, TitledBorder.TOP, new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12)));
+        mappingCard.add(mappingScroll, BorderLayout.CENTER);
+
+        JSplitPane rightSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, previewCard, mappingCard);
         rightSplit.setDividerLocation(300);
-        rightSplit.setResizeWeight(0.5);
+        rightSplit.setResizeWeight(0.4);
+        rightSplit.setBorder(BorderFactory.createEmptyBorder());
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sheetPanel, rightSplit);
+        JPanel centerWrapper = new JPanel(new BorderLayout());
+        centerWrapper.add(settingsCard, BorderLayout.NORTH);
+        centerWrapper.add(rightSplit, BorderLayout.CENTER);
+
+        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebarPanel, centerWrapper);
         mainSplit.setDividerLocation(250);
+        mainSplit.setBorder(BorderFactory.createEmptyBorder());
 
-        // --- Bottom Panel: Convert Button ---
-        JButton convertBtn = new JButton("Convert JRXML");
-        convertBtn.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 14));
-        convertBtn.setPreferredSize(new Dimension(200, 40));
+        // --- Footer Action Bar ---
+        JButton convertBtn = new JButton("GENERATE JASPER REPORT");
+        convertBtn.putClientProperty("JButton.buttonType", "roundRect");
+        convertBtn.setBackground(new Color(34, 139, 34)); // Forest Green
+        convertBtn.setForeground(Color.WHITE);
+        convertBtn.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 15));
+        convertBtn.setPreferredSize(new Dimension(280, 50));
         convertBtn.addActionListener(e -> convert());
 
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bottomPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
-        bottomPanel.add(convertBtn);
+        JPanel footerBar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        footerBar.setBackground(new Color(45, 45, 48));
+        footerBar.setBorder(new EmptyBorder(10, 20, 10, 20));
+        footerBar.add(convertBtn);
 
-        main.add(topPanel, BorderLayout.NORTH);
+        main.add(headerBar, BorderLayout.NORTH);
         main.add(mainSplit, BorderLayout.CENTER);
-        main.add(bottomPanel, BorderLayout.SOUTH);
+        main.add(footerBar, BorderLayout.SOUTH);
 
         add(main);
     }
