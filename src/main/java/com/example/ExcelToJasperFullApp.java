@@ -2,6 +2,7 @@ package com.example;
 
 import net.sf.jasperreports.components.table.*;
 import net.sf.jasperreports.engine.component.ComponentKey;
+import net.sf.jasperreports.engine.data.JRBeanCollectionDataSource;
 import net.sf.jasperreports.engine.design.*;
 import net.sf.jasperreports.engine.type.*;
 import net.sf.jasperreports.engine.xml.JRXmlWriter;
@@ -30,7 +31,13 @@ public class ExcelToJasperFullApp extends JFrame {
     private JTable previewTable;
     private JList<String> sheetList;
     private JTextField fileField;
+    private JTextField licenseField;
+    private JLabel statusLabel;
     private File selectedFile;
+
+    private int usageCount = 0;
+    private static final int FREE_LIMIT = 5;
+    private static final String VALID_LICENSE = "PRO-2024-EXCEL-JASPER";
 
     private Color headerColor = Color.LIGHT_GRAY; // 🎨 màu header
 
@@ -54,7 +61,23 @@ public class ExcelToJasperFullApp extends JFrame {
         JLabel titleLabel = new JLabel("EXCEL TO JASPER PRO");
         titleLabel.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 22));
         titleLabel.setForeground(Color.WHITE);
+
+        JPanel licensePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        licensePanel.setOpaque(false);
+
+        licenseField = new JTextField(15);
+        licenseField.putClientProperty("JTextField.placeholderText", "Nhập License Key...");
+        licenseField.putClientProperty("FlatLaf.style", "arc: 10");
+
+        statusLabel = new JLabel("Trial: 0/" + FREE_LIMIT);
+        statusLabel.setForeground(new Color(200, 200, 200));
+
+        licensePanel.add(new JLabel("License: "));
+        licensePanel.add(licenseField);
+        licensePanel.add(statusLabel);
+
         headerBar.add(titleLabel, BorderLayout.WEST);
+        headerBar.add(licensePanel, BorderLayout.EAST);
 
         // --- Top Dashboard: File & Settings ---
         JPanel settingsCard = new JPanel(new GridBagLayout());
@@ -270,6 +293,15 @@ public class ExcelToJasperFullApp extends JFrame {
 
     private void convert() {
         try {
+            boolean isPro = licenseField.getText().trim().equals(VALID_LICENSE);
+
+            if (!isPro && usageCount >= FREE_LIMIT) {
+                JOptionPane.showMessageDialog(this,
+                    "Bạn đã hết lượt dùng thử (Giới hạn: " + FREE_LIMIT + ").\nVui lòng nhập License để tiếp tục!",
+                    "License Required", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
             DefaultTableModel model = (DefaultTableModel) mappingTable.getModel();
 
             List<Map<String, String>> cols = new ArrayList<>();
@@ -306,6 +338,14 @@ public class ExcelToJasperFullApp extends JFrame {
             String out = base + "_" + safeSheetName + ".jrxml";
 
             buildJRXML(out, cols);
+
+            usageCount++;
+            if (isPro) {
+                statusLabel.setText("Activated (PRO)");
+                statusLabel.setForeground(new Color(50, 205, 50));
+            } else {
+                statusLabel.setText("Trial: " + usageCount + "/" + FREE_LIMIT);
+            }
 
             JOptionPane.showMessageDialog(this, "DONE: " + out);
 
@@ -348,6 +388,11 @@ public class ExcelToJasperFullApp extends JFrame {
         design.addDataset(dataset);
 
         // PARAM
+        JRDesignParameter dsParam = new JRDesignParameter();
+        dsParam.setName("ItemDataSource");
+        dsParam.setValueClass(JRBeanCollectionDataSource.class);
+        design.addParameter(dsParam);
+
         for (Map<String, String> c : cols) {
             JRDesignParameter p = new JRDesignParameter();
             p.setName(c.get("param"));
