@@ -9,8 +9,11 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import com.formdev.flatlaf.FlatDarkLaf;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.Color;
@@ -39,7 +42,14 @@ public class ExcelToJasperFullApp extends JFrame {
     }
 
     private void initUI() {
-        JPanel main = new JPanel(new BorderLayout());
+        // Modern properties
+        UIManager.put("Button.arc", 10);
+        UIManager.put("Component.arc", 10);
+        UIManager.put("TextComponent.arc", 10);
+        UIManager.put("ProgressBar.arc", 10);
+
+        JPanel main = new JPanel(new BorderLayout(10, 10));
+        main.setBorder(new EmptyBorder(10, 10, 10, 10));
 
         JButton chooseBtn = new JButton("Chọn Excel");
         JButton colorBtn = new JButton("Màu Header");
@@ -54,11 +64,12 @@ public class ExcelToJasperFullApp extends JFrame {
             if (chosen != null) headerColor = chosen;
         });
 
-        JPanel top = new JPanel(new BorderLayout());
+        JPanel top = new JPanel(new BorderLayout(10, 0));
         top.add(fileField, BorderLayout.CENTER);
 
-        JPanel leftTop = new JPanel();
+        JPanel leftTop = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         leftTop.add(chooseBtn);
+        leftTop.add(Box.createHorizontalStrut(10));
         leftTop.add(colorBtn);
 
         top.add(leftTop, BorderLayout.WEST);
@@ -67,17 +78,40 @@ public class ExcelToJasperFullApp extends JFrame {
         sheetList.addListSelectionListener(e -> loadData());
 
         previewTable = new JTable();
+        previewTable.setRowHeight(25);
+        previewTable.setSelectionBackground(new Color(60, 120, 180));
+
         mappingTable = new JTable();
+        mappingTable.setRowHeight(25);
+        mappingTable.setSelectionBackground(new Color(60, 120, 180));
+
+        JScrollPane sheetScroll = new JScrollPane(sheetList);
+        sheetScroll.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createEtchedBorder(), "Sheets", TitledBorder.LEFT, TitledBorder.TOP));
+
+        JScrollPane previewScroll = new JScrollPane(previewTable);
+        previewScroll.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createEtchedBorder(), "Data Preview", TitledBorder.LEFT, TitledBorder.TOP));
+
+        JScrollPane mappingScroll = new JScrollPane(mappingTable);
+        mappingScroll.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createEtchedBorder(), "Column Mapping", TitledBorder.LEFT, TitledBorder.TOP));
 
         JSplitPane right = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-                new JScrollPane(previewTable),
-                new JScrollPane(mappingTable));
+                previewScroll,
+                mappingScroll);
         right.setDividerLocation(400);
+        right.setBorder(null);
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                new JScrollPane(sheetList), right);
+                sheetScroll, right);
+        mainSplit.setDividerLocation(200);
+        mainSplit.setBorder(null);
 
         JButton convertBtn = new JButton("Convert JRXML");
+        convertBtn.setFont(convertBtn.getFont().deriveFont(java.awt.Font.BOLD, 14f));
+        convertBtn.setBackground(new Color(0, 120, 215));
+        convertBtn.setForeground(Color.WHITE);
         convertBtn.addActionListener(e -> convert());
 
         main.add(top, BorderLayout.NORTH);
@@ -344,6 +378,7 @@ public class ExcelToJasperFullApp extends JFrame {
     }
 
     public static void main(String[] args) {
+        FlatDarkLaf.setup();
         SwingUtilities.invokeLater(() -> new ExcelToJasperFullApp().setVisible(true));
     }
 }
