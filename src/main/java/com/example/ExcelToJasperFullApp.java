@@ -21,6 +21,7 @@ import java.awt.*;
 import java.awt.Color;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.text.Normalizer;
 import java.util.*;
 import java.util.List;
@@ -37,13 +38,14 @@ public class ExcelToJasperFullApp extends JFrame {
 
     private int usageCount = 0;
     private static final int FREE_LIMIT = 5;
-    private static final String VALID_LICENSE = "PRO-2024-EXCEL-JASPER";
 
-    private Color headerColor = Color.LIGHT_GRAY; // 🎨 màu header
+    private Color headerColor = Color.LIGHT_GRAY;
+
+    private ExcelToJasperService excelToJasperService = new ExcelToJasperService();
 
     public ExcelToJasperFullApp() {
         setTitle("Excel → Jasper PRO UI");
-        setSize(1300, 800);
+        setSize(1400, 850);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         initUI();
@@ -211,12 +213,9 @@ public class ExcelToJasperFullApp extends JFrame {
     }
 
     private void loadSheets() {
-        try (Workbook wb = new XSSFWorkbook(new FileInputStream(selectedFile))) {
-            Vector<String> names = new Vector<>();
-            for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-                names.add(wb.getSheetName(i));
-            }
-            sheetList.setListData(names);
+        try (FileInputStream fis = new FileInputStream(selectedFile)) {
+            List<String> names = excelToJasperService.getSheetNames(fis);
+            sheetList.setListData(new Vector<>(names));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -226,23 +225,21 @@ public class ExcelToJasperFullApp extends JFrame {
         String sheetName = sheetList.getSelectedValue();
         if (sheetName == null) return;
 
-        try (Workbook wb = new XSSFWorkbook(new FileInputStream(selectedFile))) {
+        try (FileInputStream fis = new FileInputStream(selectedFile);
+             Workbook wb = new XSSFWorkbook(fis)) {
+
             Sheet sheet = wb.getSheet(sheetName);
-            Row header = sheet.getRow(0);
+            Row headerRow = sheet.getRow(0);
+            int colCount = headerRow.getPhysicalNumberOfCells();
 
-            int colCount = header.getPhysicalNumberOfCells();
-
+            // Preview 20 rows
             Vector<String> columns = new Vector<>();
+            for (int i = 0; i < colCount; i++) columns.add(headerRow.getCell(i).toString());
+
             Vector<Vector<String>> data = new Vector<>();
-
-            for (int i = 0; i < colCount; i++) {
-                columns.add(header.getCell(i).toString());
-            }
-
             for (int r = 1; r <= 20; r++) {
                 Row row = sheet.getRow(r);
-                if (row == null) continue;
-
+                if (row == null) break;
                 Vector<String> rowData = new Vector<>();
                 for (int c = 0; c < colCount; c++) {
                     Cell cell = row.getCell(c);
@@ -250,46 +247,20 @@ public class ExcelToJasperFullApp extends JFrame {
                 }
                 data.add(rowData);
             }
-
             previewTable.setModel(new DefaultTableModel(data, columns));
 
-            Vector<String> mapCols = new Vector<>(Arrays.asList(
-                    "Use", "Original", "Field", "Label", "Param", "Source", "Expression", "Width"
-            ));
+            // Mapping Data
+            List<ExcelToJasperService.ColumnMapping> mappings = excelToJasperService.analyzeSheet(new FileInputStream(selectedFile), sheetName);
+            String[] mapCols = {"Use", "Original", "Field", "Label", "Param", "Source", "Expression", "Width"};
 
-            Vector<Vector<Object>> mapData = new Vector<>();
-
-            for (int i = 0; i < colCount; i++) {
-                String col = columns.get(i);
-                String clean = col.replace(" ", "_");
-
-                int w = sheet.getColumnWidth(i);
-                int px = (int) (w / 256.0 * 7);
-                if (px < 50) px = 50;
-
-                Vector<Object> row = new Vector<>();
-                row.add(true);
-                row.add(col);
-                row.add(clean);
-                row.add(col);
-                row.add("P_" + clean);
-                row.add("FIELD");
-                row.add("$F{" + clean + "}");
-                row.add(px);
-
-                mapData.add(row);
-            }
-
-            DefaultTableModel model = new DefaultTableModel(mapData, mapCols) {
-                public Class<?> getColumnClass(int c) {
-                    return c == 0 ? Boolean.class : String.class;
-                }
-
-                public boolean isCellEditable(int r, int c) {
-                    return c != 1;
-                }
+            DefaultTableModel model = new DefaultTableModel(mapCols, 0) {
+                public Class<?> getColumnClass(int c) { return c == 0 ? Boolean.class : (c == 7 ? Integer.class : String.class); }
+                public boolean isCellEditable(int r, int c) { return c != 1; }
             };
 
+            for (ExcelToJasperService.ColumnMapping m : mappings) {
+                model.addRow(new Object[]{m.use, m.originalName, m.fieldName, m.label, m.paramName, m.source, m.expression, m.width});
+            }
             mappingTable.setModel(model);
 
         } catch (Exception e) {
@@ -299,53 +270,32 @@ public class ExcelToJasperFullApp extends JFrame {
 
     private void convert() {
         try {
-            boolean isPro = licenseField.getText().trim().equals(VALID_LICENSE);
-
+            boolean isPro = LicenseManager.isValid(licenseField.getText());
             if (!isPro && usageCount >= FREE_LIMIT) {
-                JOptionPane.showMessageDialog(this,
-                    "Bạn đã hết lượt dùng thử (Giới hạn: " + FREE_LIMIT + ").\nVui lòng nhập License để tiếp tục!",
-                    "License Required", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Trial limit reached.", "License Required", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
             DefaultTableModel model = (DefaultTableModel) mappingTable.getModel();
-
-            List<Map<String, String>> cols = new ArrayList<>();
-
+            List<ExcelToJasperService.ColumnMapping> cols = new ArrayList<>();
             for (int i = 0; i < model.getRowCount(); i++) {
-                boolean use = (boolean) model.getValueAt(i, 0);
-                if (!use) continue;
-
-                String field = model.getValueAt(i, 2).toString();
-                String label = model.getValueAt(i, 3).toString();
-                String param = cleanParam(model.getValueAt(i, 4).toString());
-                String source = model.getValueAt(i, 5).toString();
-                String exp = model.getValueAt(i, 6).toString();
-                int widthVal = Integer.parseInt(model.getValueAt(i, 7).toString());
-
-                if (exp == null || exp.trim().isEmpty()) {
-                    exp = source.equals("PARAM")
-                            ? "$P{" + param + "}"
-                            : "$F{" + field + "}";
-                }
-
-                Map<String, String> m = new HashMap<>();
-                m.put("field", field);
-                m.put("label", label);
-                m.put("param", param);
-                m.put("exp", exp);
-                m.put("width", String.valueOf(widthVal));
-
-                cols.add(m);
+                ExcelToJasperService.ColumnMapping cm = new ExcelToJasperService.ColumnMapping();
+                cm.use = (boolean) model.getValueAt(i, 0);
+                cm.fieldName = model.getValueAt(i, 2).toString();
+                cm.label = model.getValueAt(i, 3).toString();
+                cm.paramName = model.getValueAt(i, 4).toString();
+                cm.source = model.getValueAt(i, 5).toString();
+                cm.expression = model.getValueAt(i, 6).toString();
+                cm.width = Integer.parseInt(model.getValueAt(i, 7).toString());
+                cols.add(cm);
             }
 
             String sheetName = sheetList.getSelectedValue();
-            String base = selectedFile.getAbsolutePath().replace(".xlsx", "");
-            String safeSheetName = normalize(sheetName);
+            String outPath = selectedFile.getAbsolutePath().replace(".xlsx", "_" + normalize(sheetName) + ".jrxml");
 
-            String out = base + "_" + safeSheetName + ".jrxml";
-
-            buildJRXML(out, cols);
+            try (FileOutputStream fos = new FileOutputStream(outPath)) {
+                excelToJasperService.generateJRXML(cols, fos, headerColor);
+            }
 
             usageCount++;
             if (isPro) {
@@ -355,148 +305,17 @@ public class ExcelToJasperFullApp extends JFrame {
                 statusLabel.setText("Trial: " + usageCount + "/" + FREE_LIMIT);
             }
 
-            JOptionPane.showMessageDialog(this, "DONE: " + out);
+            JOptionPane.showMessageDialog(this, "Generated: " + outPath);
 
         } catch (Exception e) {
             e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error: " + e.getMessage());
         }
-    }
-
-    private String cleanParam(String p) {
-        return p.replace("$P{", "").replace("}", "").trim();
     }
 
     private String normalize(String input) {
         String temp = Normalizer.normalize(input, Normalizer.Form.NFD);
-        return temp.replaceAll("[^\\p{ASCII}]", "")
-                .replaceAll("[^a-zA-Z0-9]", "_");
-    }
-
-    private void buildJRXML(String path, List<Map<String, String>> cols) throws Exception {
-
-        JasperDesign design = new JasperDesign();
-        design.setName("FINAL_REPORT");
-
-        int totalContentWidth = 0;
-        for (Map<String, String> c : cols) {
-            totalContentWidth += Integer.parseInt(c.get("width"));
-        }
-
-        design.setColumnWidth(totalContentWidth);
-        design.setPageWidth(totalContentWidth + 40);
-        design.setPageHeight(842);
-        design.setLeftMargin(20);
-        design.setRightMargin(20);
-        design.setTopMargin(20);
-        design.setBottomMargin(20);
-
-        // SUB DATASET
-        JRDesignDataset dataset = new JRDesignDataset(false);
-        dataset.setName("ItemDataSource");
-
-        for (Map<String, String> c : cols) {
-            JRDesignField f = new JRDesignField();
-            f.setName(c.get("field"));
-            f.setValueClass(String.class);
-            dataset.addField(f);
-        }
-
-        design.addDataset(dataset);
-
-        // PARAM
-        JRDesignParameter dsParam = new JRDesignParameter();
-        dsParam.setName("ItemDataSource");
-        dsParam.setValueClass(JRBeanCollectionDataSource.class);
-        design.addParameter(dsParam);
-
-        for (Map<String, String> c : cols) {
-            JRDesignParameter p = new JRDesignParameter();
-            p.setName(c.get("param"));
-            p.setValueClass(String.class);
-            design.addParameter(p);
-        }
-
-        // TABLE
-        StandardTable table = new StandardTable();
-
-        JRDesignDatasetRun run = new JRDesignDatasetRun();
-        run.setDatasetName("ItemDataSource");
-        run.setDataSourceExpression(new JRDesignExpression("$P{ItemDataSource}"));
-
-        table.setDatasetRun(run);
-
-        for (Map<String, String> c : cols) {
-
-            int colWidth = Integer.parseInt(c.get("width"));
-            StandardColumn col = new StandardColumn();
-            col.setWidth(colWidth);
-
-            // ===== HEADER =====
-            DesignCell header = new DesignCell();
-            header.setHeight(30);
-            header.getLineBox().getPen().setLineWidth(0.5f);
-            header.getLineBox().getPen().setLineStyle(LineStyleEnum.SOLID);
-
-            JRDesignStaticText txt = new JRDesignStaticText();
-            txt.setText(c.get("label"));
-            txt.setWidth(colWidth);
-            txt.setHeight(30);
-            txt.setBold(true);
-            txt.setHorizontalTextAlign(HorizontalTextAlignEnum.CENTER);
-            txt.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
-            txt.setBackcolor(headerColor);
-            txt.setMode(ModeEnum.OPAQUE);
-
-            header.addElement(txt);
-            col.setColumnHeader(header);
-
-            // ===== DETAIL =====
-            DesignCell detail = new DesignCell();
-            detail.setHeight(25);
-            detail.getLineBox().getPen().setLineWidth(0.5f);
-            detail.getLineBox().getPen().setLineStyle(LineStyleEnum.SOLID);
-
-            JRDesignTextField tf = new JRDesignTextField();
-            tf.setExpression(new JRDesignExpression(c.get("exp")));
-            tf.setWidth(colWidth);
-            tf.setHeight(25);
-
-            tf.setHorizontalTextAlign(HorizontalTextAlignEnum.LEFT);
-            tf.setVerticalTextAlign(VerticalTextAlignEnum.MIDDLE);
-            tf.setStretchWithOverflow(true);
-
-            // zebra row
-            JRDesignExpression bgExp = new JRDesignExpression();
-            bgExp.setText("$V{REPORT_COUNT} % 2 == 0 ? java.awt.Color.WHITE : new java.awt.Color(240,240,240)");
-            tf.setMode(ModeEnum.OPAQUE);
-            tf.setBackcolor(Color.WHITE);
-
-            detail.addElement(tf);
-            col.setDetailCell(detail);
-
-            table.addColumn(col);
-        }
-
-        JRDesignComponentElement comp = new JRDesignComponentElement();
-        comp.setComponentKey(new ComponentKey(
-                "http://jasperreports.sourceforge.net/jasperreports/components",
-                "jr",
-                "table"
-        ));
-
-        comp.setComponent(table);
-        comp.setX(0);
-        comp.setY(0);
-        comp.setWidth(totalContentWidth);
-        comp.setHeight(60);
-
-        JRDesignBand band = new JRDesignBand();
-        band.setHeight(60);
-        band.addElement(comp);
-
-        ((JRDesignSection) design.getDetailSection()).addBand(band);
-
-        JRXmlWriter.writeReport(design, path, "UTF-8");
+        return temp.replaceAll("[^\\p{ASCII}]", "").replaceAll("[^a-zA-Z0-9]", "_");
     }
 
     public static void main(String[] args) {
