@@ -18,7 +18,7 @@ public class ExcelToJasperApp {
 
         // ===== CHỌN HEADER =====
         int headerStartRow = 0;   // dòng bắt đầu header (0-based)
-        int headerRowCount = 2;   // số dòng header
+        int headerRowCount = 1;   // số dòng header
 
         convert(excelPath, jrxmlPath, headerStartRow, headerRowCount);
 
