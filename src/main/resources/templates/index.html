@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Excel to Jasper Pro</title>
+    <meta charset="UTF-8">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .hidden { display: none; }
+        .card { border-radius: 15px; overflow: hidden; }
+        .btn-round { border-radius: 10px; }
+        body { background-color: #f0f2f5; }
+    </style>
+</head>
+<body class="py-5">
+    <div class="container">
+        <!-- Header -->
+        <div class="row align-items-center mb-5 bg-white p-4 shadow-sm rounded-4">
+            <div class="col-lg-7">
+                <h1 class="text-primary fw-bold m-0">EXCEL TO JASPER PRO</h1>
+            </div>
+            <div class="col-lg-5 text-end">
+                <form action="/set-license" method="post" class="d-inline-flex gap-2">
+                    <input type="text" name="license" class="form-control form-control-sm btn-round" placeholder="License Key" th:value="${license}">
+                    <button type="submit" class="btn btn-dark btn-sm btn-round px-3">Activate</button>
+                </form>
+                <div class="mt-2">
+                    <span th:if="${isPro}" class="badge bg-success">Activated (PRO)</span>
+                    <span th:unless="${isPro}" class="badge bg-secondary" th:text="'Trial: ' + ${usageCount} + '/' + ${freeLimit}"></span>
+                </div>
+            </div>
+        </div>
+
+        <div th:if="${error}" class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
+            <span th:text="${error}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <div th:if="${success}" class="alert alert-success alert-dismissible fade show text-center rounded-3" role="alert">
+            <h4 class="alert-heading">Success!</h4>
+            <p th:text="${success}"></p>
+            <hr>
+            <a href="/download" class="btn btn-success btn-lg px-5 fw-bold shadow btn-round">
+                Download Generated JRXML
+            </a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Workflow -->
+        <div class="row justify-content-center">
+            <!-- Step 1: Upload -->
+            <div class="col-md-8 mb-4" th:if="${sheetNames == null}">
+                <div class="card shadow border-0">
+                    <div class="card-header bg-primary text-white py-3">
+                        <h5 class="mb-0">1. Upload Excel File</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <form action="/list-sheets" method="post" enctype="multipart/form-data" class="row g-3 align-items-center">
+                            <div class="col-md-9">
+                                <input type="file" name="file" class="form-control form-control-lg btn-round" accept=".xlsx" required>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-primary btn-lg w-100 btn-round">Analyze</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Mapping Configuration -->
+            <div class="col-md-12 mb-4" th:if="${sheetNames != null}">
+                <div class="card shadow border-0">
+                    <div class="card-header bg-success text-white py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">2. Configure Mapping: <b th:text="${fileName}"></b></h5>
+                        <a href="/reset" class="btn btn-sm btn-light btn-round">New Upload</a>
+                    </div>
+                    <div class="card-body p-4">
+                        <form id="convertForm" action="/convert" method="post">
+                            <div class="row mb-4 g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Select Sheet</label>
+                                    <select name="sheetName" id="sheetSelect" class="form-select btn-round" onchange="window.location.href='/?sheet=' + this.value">
+                                        <option th:each="sheet : ${sheetNames}"
+                                                th:value="${sheet}"
+                                                th:text="${sheet}"
+                                                th:selected="${sheet == selectedSheet}"></option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold">Header Color</label>
+                                    <input type="color" name="headerColor" class="form-control form-control-color w-100 btn-round" value="#D3D3D3">
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Use</th>
+                                            <th>Original</th>
+                                            <th>Field Name</th>
+                                            <th>Label</th>
+                                            <th>Expression</th>
+                                            <th>Width (px)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr th:each="m, iter : ${mappings}">
+                                            <td><input type="checkbox" th:name="'mappings[' + ${iter.index} + '].use'" checked class="form-check-input"></td>
+                                            <td th:text="${m.originalName}"></td>
+                                            <td>
+                                                <input type="hidden" th:name="'mappings[' + ${iter.index} + '].originalName'" th:value="${m.originalName}">
+                                                <input type="text" th:name="'mappings[' + ${iter.index} + '].fieldName'" th:value="${m.fieldName}" class="form-control form-control-sm btn-round">
+                                            </td>
+                                            <td><input type="text" th:name="'mappings[' + ${iter.index} + '].label'" th:value="${m.label}" class="form-control form-control-sm btn-round"></td>
+                                            <td><input type="text" th:name="'mappings[' + ${iter.index} + '].expression'" th:value="${m.expression}" class="form-control form-control-sm btn-round"></td>
+                                            <td><input type="number" th:name="'mappings[' + ${iter.index} + '].width'" th:value="${m.width}" class="form-control form-control-sm btn-round" style="width: 80px;"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button type="submit" id="convertBtn" class="btn btn-success btn-lg px-5 shadow btn-round">
+                                    GENERATE JASPER REPORT
+                                </button>
+                                <div id="loader" class="hidden mt-3">
+                                    <div class="spinner-border text-success" role="status"></div>
+                                    <p class="text-muted">Processing...</p>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('convertForm')?.addEventListener('submit', function() {
+            const btn = document.getElementById('convertBtn');
+            const loader = document.getElementById('loader');
+            btn.classList.add('disabled');
+            loader.classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
