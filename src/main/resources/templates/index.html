@@ -30,6 +30,26 @@
         </div>
 
         <div class="row justify-content-center">
+            <!-- Special Feature: Shipping Label -->
+            <div class="col-md-8 mb-4">
+                <div class="card shadow-sm border-0 border-start border-info border-5">
+                    <div class="card-body p-4">
+                        <h5 class="mb-3 text-info fw-bold">Gen Jasper by Image</h5>
+                        <form action="/generate-shipping-label" method="post" enctype="multipart/form-data" class="row g-3 align-items-center">
+                            <div class="col-md-8">
+                                <label class="form-label text-muted small">Select your label image (e.g., Vietnam Post sample)</label>
+                                <input type="file" name="image" class="form-control" accept="image/*" required>
+                            </div>
+                            <div class="col-md-4 mt-auto">
+                                <button type="submit" class="btn btn-info w-100 text-white fw-bold">
+                                    Generate JRXML
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <!-- Step 1: Upload -->
             <div class="col-md-8 mb-4" th:if="${sheetNames == null}">
                 <div class="card shadow-sm border-0">

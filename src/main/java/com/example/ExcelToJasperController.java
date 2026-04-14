@@ -23,6 +23,9 @@ public class ExcelToJasperController {
     @Autowired
     private ExcelToJasperService excelToJasperService;
 
+    @Autowired
+    private ShippingLabelService shippingLabelService;
+
     @GetMapping("/")
     public String index(HttpSession session, Model model) {
         // Carry over attributes from session if they exist
@@ -107,6 +110,25 @@ public class ExcelToJasperController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(jrxmlBytes.length)
                 .body(jrxmlBytes);
+    }
+
+    @PostMapping("/generate-shipping-label")
+    public ResponseEntity<byte[]> generateShippingLabel(@RequestParam("image") MultipartFile image) throws Exception {
+        // Logic currently generates a template based on the recognized pattern of shipping labels
+        // In a real OCR scenario, we would analyze the 'image' here.
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        shippingLabelService.generateShippingLabelJRXML(baos);
+
+        String fileName = image.getOriginalFilename();
+        String jrxmlName = (fileName != null && fileName.contains("."))
+                ? fileName.substring(0, fileName.lastIndexOf(".")) + ".jrxml"
+                : "shipping_label_template.jrxml";
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + jrxmlName + "\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(baos.toByteArray());
     }
 
     @GetMapping("/reset")
