@@ -23,6 +23,9 @@ public class ExcelToJasperController {
     @Autowired
     private ExcelToJasperService excelToJasperService;
 
+    @Autowired
+    private ShippingLabelService shippingLabelService;
+
     @GetMapping("/")
     public String index(HttpSession session, Model model) {
         // Carry over attributes from session if they exist
@@ -107,6 +110,17 @@ public class ExcelToJasperController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(jrxmlBytes.length)
                 .body(jrxmlBytes);
+    }
+
+    @GetMapping("/generate-shipping-label")
+    public ResponseEntity<byte[]> generateShippingLabel() throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        shippingLabelService.generateShippingLabelJRXML(baos);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"shipping_label_template.jrxml\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(baos.toByteArray());
     }
 
     @GetMapping("/reset")
